@@ -91,6 +91,11 @@ class CandyStartSelectedButton(CandyButtonBase):
     async def async_press(self) -> None:
         programs = self._data.get("programs", DEFAULT_PROGRAMS)
         selected = self._data.get("selected_program", list(programs.keys())[0])
+        # Fallback: read from select entity state
+        select_id = f"select.{self._entry_id.replace('-', '_')}_programa_lavarropas"
+        select_state = self.hass.states.get(select_id)
+        if select_state:
+            selected = select_state.state
         program = programs.get(selected) or list(programs.values())[0]
         await self.hass.async_add_executor_job(
             self._send_command, {
