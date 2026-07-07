@@ -9,5 +9,5 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/cotagaita1460-art/ha-candy-control/issues",
   "requirements": [],
-  "version": "1.0.0"
+  "version": "1.1.0"
 }
