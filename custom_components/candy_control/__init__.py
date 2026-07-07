@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import binascii
-import json
 import logging
+
+import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD
@@ -13,6 +14,16 @@ from homeassistant.helpers import config_validation as cv
 from .const import DOMAIN, PLATFORMS, CONF_USE_ENCRYPTION
 
 _LOGGER = logging.getLogger(__name__)
+
+START_PROGRAM_SCHEMA = vol.Schema({
+    vol.Required("pr_nm"): cv.positive_int,
+    vol.Required("pr_code"): cv.string,
+    vol.Optional("temp", default=40): vol.All(vol.Coerce(int), vol.In([0, 20, 30, 40, 60, 90])),
+    vol.Optional("spin", default=10): vol.All(vol.Coerce(int), vol.Range(min=0, max=16)),
+    vol.Optional("steam", default=0): vol.Any(0, 1),
+    vol.Optional("dry", default=0): vol.Any(0, 1),
+    vol.Optional("delay"): vol.All(vol.Coerce(int), vol.Range(min=0, max=96)),
+})
 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
@@ -32,8 +43,8 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     async def handle_start(call: ServiceCall) -> None:
         params = {
             "StSt": "1",
-            "PrNm": str(call.data.get("pr_nm", "1")),
-            "PrCode": str(call.data.get("pr_code", "136")),
+            "PrNm": str(call.data["pr_nm"]),
+            "PrCode": str(call.data["pr_code"]),
             "TmpTgt": str(call.data.get("temp", 40)),
             "SpdTgt": str(call.data.get("spin", 10)),
             "Stm": str(call.data.get("steam", 0)),
@@ -41,12 +52,12 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         }
         if call.data.get("delay"):
             params["DelVl"] = str(call.data["delay"])
-        _send_command(data, params)
+        await hass.async_add_executor_job(_send_command, data, params)
 
     async def handle_stop(call: ServiceCall) -> None:
-        _send_command(data, {"StSt": "0"})
+        await hass.async_add_executor_job(_send_command, data, {"StSt": "0"})
 
-    hass.services.async_register(DOMAIN, "start_program", handle_start)
+    hass.services.async_register(DOMAIN, "start_program", handle_start, schema=START_PROGRAM_SCHEMA)
     hass.services.async_register(DOMAIN, "stop_program", handle_stop)
 
     return True
