@@ -3,14 +3,11 @@
     "step": {
       "user": {
         "data": {
-          "ip_address": "Dirección IP del lavarropas"
-        }
+          "ip_address": "Dirección IP del lavarropas",
+          "password": "Clave de encriptación (XOR)"
+        },
+        "description": "Ingresá la IP del lavarropas Candy. La clave XOR se obtiene con la herramienta CandySimplyFi."
       }
-    },
-    "error": {
-      "cannot_connect": "No se puede conectar al lavarropas",
-      "invalid_auth": "Clave de encriptación inválida",
-      "unknown": "Error desconocido"
     },
     "abort": {
       "already_configured": "Este lavarropas ya está configurado"

@@ -1,4 +1,70 @@
-"""Services for Candy Control."""
+start_program:
+  name: Iniciar programa
+  description: Inicia un ciclo de lavado en el lavarropas Candy.
+  fields:
+    pr_nm:
+      name: Posición del dial
+      description: Número de programa en el dial (1-15)
+      required: true
+      example: 1
+      selector:
+        number:
+          min: 1
+          max: 15
+          mode: box
+    pr_code:
+      name: Código de programa
+      description: Código interno del programa (136=DIARIO 39', 135=COLOR, etc)
+      required: true
+      example: 136
+      selector:
+        text:
+    temp:
+      name: Temperatura
+      description: Temperatura en °C (0=Frío, 20, 30, 40, 60, 90)
+      required: false
+      default: 40
+      selector:
+        number:
+          min: 0
+          max: 90
+          step: 10
+          mode: slider
+    spin:
+      name: RPM/100
+      description: Velocidad de centrifugado dividido 100 (8=800, 10=1000, 12=1200)
+      required: false
+      default: 10
+      selector:
+        number:
+          min: 0
+          max: 16
+          step: 2
+          mode: slider
+    steam:
+      name: Vapor
+      description: Activar vapor (0=No, 1=Sí)
+      required: false
+      default: 0
+      selector:
+        boolean:
+    dry:
+      name: Secado extra
+      description: Secado extra (0=No, 1=Sí)
+      required: false
+      default: 0
+      selector:
+        boolean:
+    delay:
+      name: Delay
+      description: Inicio diferido en unidades de 30 minutos
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 96
+          mode: box
 
-START_PROGRAM_SCHEMA = {}
-STOP_PROGRAM_SCHEMA = {}
+stop_program:
+  name: Detener programa
+  description: Detiene el ciclo de lavado actual.

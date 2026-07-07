@@ -10,4 +10,3 @@ CONF_USE_ENCRYPTION = "use_encryption"
 MANUFACTURER = "Candy"
 DEVICE_NAME = "Lavarropas Candy"
 
-XOR_KEY_LEN = 16
