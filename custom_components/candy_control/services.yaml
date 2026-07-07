@@ -1,0 +1,4 @@
+"""Services for Candy Control."""
+
+START_PROGRAM_SCHEMA = {}
+STOP_PROGRAM_SCHEMA = {}
