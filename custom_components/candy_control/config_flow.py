@@ -14,8 +14,8 @@ from .const import DOMAIN, CONF_USE_ENCRYPTION
 _LOGGER = logging.getLogger(__name__)
 
 STEP_DATA_SCHEMA = vol.Schema({
-    vol.Required(CONF_IP_ADDRESS, default="192.168.1.52"): str,
-    vol.Optional(CONF_PASSWORD, default="jjdcilaidmaijbfe"): str,
+    vol.Required(CONF_IP_ADDRESS): str,
+    vol.Optional(CONF_PASSWORD, default=""): str,
 })
 
 

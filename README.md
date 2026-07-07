@@ -15,7 +15,7 @@ Extensión HACS para controlar lavarropas Candy/Simply-Fi desde Home Assistant.
 4. Instalá "Candy Control"
 5. Reiniciá HA
 6. Settings → Integrations → Add → "Candy Control"
-7. Ingresá la IP del lavarropas (ej: `192.168.1.52`)
+7. Ingresá la IP del lavarropas (ej: `192.168.x.x`) y la clave de encriptación XOR
 
 ## Servicios disponibles
 
@@ -25,7 +25,7 @@ Inicia un ciclo de lavado.
 | Parámetro | Tipo | Default | Descripción |
 |-----------|------|---------|-------------|
 | `pr_nm` | int | `1` | Posición del dial |
-| `pr_code` | int | `136` | Código interno del programa |
+| `pr_code` | string | - | Código interno del programa |
 | `temp` | int | `40` | Temperatura en °C (0=frio, 20,30,40,60,90) |
 | `spin` | int | `10` | RPM/100 (8=800, 10=1000, 12=1200) |
 | `steam` | int | `0` | Vapor (0=No, 1=Sí) |
