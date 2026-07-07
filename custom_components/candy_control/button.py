@@ -89,11 +89,8 @@ class CandyStartSelectedButton(CandyButtonBase):
         return "mdi:play"
 
     async def async_press(self) -> None:
-        select_state = self.hass.states.get("select.programa_lavarropas")
-        program = self._get_program_data(select_state)
-        if not program:
-            _LOGGER.error("No program selected or invalid program data")
-            return
+        selected = self._data.get("selected_program", "DIARIO 39'")
+        program = PROGRAMS.get(selected) or PROGRAMS["DIARIO 39'"]
         await self.hass.async_add_executor_job(
             self._send_command, {
                 "StSt": "1",
@@ -103,10 +100,3 @@ class CandyStartSelectedButton(CandyButtonBase):
                 "SpdTgt": str(program["spin"]),
             }
         )
-
-    @staticmethod
-    def _get_program_data(select_state):
-        if select_state is None:
-            return PROGRAMS.get("DIARIO 39'")
-        name = select_state.state
-        return PROGRAMS.get(name)
