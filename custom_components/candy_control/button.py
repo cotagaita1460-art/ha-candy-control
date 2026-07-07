@@ -43,7 +43,7 @@ class CandyButtonBase(ButtonEntity):
         import requests
         ip = self._data["ip"]
         use_encryption = self._data["use_encryption"]
-        query = "Write=1" + "".join(f"&{k}={v}" for k, v in params.items())
+        query = "Write=1" + "".join(f"&{k}={v}" for k, v in params.items() if v is not None)
         url = f"http://{ip}/http-write.json?encrypted=1&data="
         if use_encryption and self._data["password"]:
             encrypted = self._xor_crypt(query.encode())
@@ -90,13 +90,11 @@ class CandyStartSelectedButton(CandyButtonBase):
 
     async def async_press(self) -> None:
         programs = self._data.get("programs", DEFAULT_PROGRAMS)
-        # Find the select entity state for this config entry
-        selected = None
-        for state in self.hass.states.async_all():
-            if state.domain == "select" and self._entry_id in state.attributes.get("unique_id", ""):
-                selected = state.state
-                break
-        if not selected:
+        # Read directly from the select entity state
+        select_state = self.hass.states.get("select.lavarropas_candy_programa_lavarropas")
+        if select_state:
+            selected = select_state.state
+        else:
             selected = self._data.get("selected_program", list(programs.keys())[0])
         program = programs.get(selected) or list(programs.values())[0]
         await self.hass.async_add_executor_job(
@@ -106,5 +104,7 @@ class CandyStartSelectedButton(CandyButtonBase):
                 "PrCode": program["pr_code"],
                 "TmpTgt": str(program["temp"]),
                 "SpdTgt": str(program["spin"]),
+                "Stm": str(program.get("steam", 0)),
+                "Dry": str(program.get("dry", 0)),
             }
         )
