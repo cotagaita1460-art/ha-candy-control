@@ -10,7 +10,7 @@ from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 
-from .const import DOMAIN, CONF_USE_ENCRYPTION, PROGRAMS, MANUFACTURER, DEVICE_NAME
+from .const import DOMAIN, CONF_USE_ENCRYPTION, DEFAULT_PROGRAMS, MANUFACTURER, DEVICE_NAME
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -89,8 +89,9 @@ class CandyStartSelectedButton(CandyButtonBase):
         return "mdi:play"
 
     async def async_press(self) -> None:
-        selected = self._data.get("selected_program", "DIARIO 39'")
-        program = PROGRAMS.get(selected) or PROGRAMS["DIARIO 39'"]
+        programs = self._data.get("programs", DEFAULT_PROGRAMS)
+        selected = self._data.get("selected_program", list(programs.keys())[0])
+        program = programs.get(selected) or list(programs.values())[0]
         await self.hass.async_add_executor_job(
             self._send_command, {
                 "StSt": "1",

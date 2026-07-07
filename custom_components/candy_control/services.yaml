@@ -16,7 +16,7 @@ start_program:
       name: Código de programa
       description: Código interno del programa (136=DIARIO 39', 135=COLOR, etc)
       required: true
-      example: 136
+      example: "136"
       selector:
         text:
     temp:
@@ -68,3 +68,15 @@ start_program:
 stop_program:
   name: Detener programa
   description: Detiene el ciclo de lavado actual.
+
+set_programs:
+  name: Configurar programas
+  description: Actualiza la lista de programas del lavarropas.
+  fields:
+    programs:
+      name: Programas
+      description: Lista de programas con nombre, pr, pr_code, temp, spin, desc
+      required: true
+      example: '[{"name": "MI PROG", "pr": 1, "pr_code": "136", "temp": 40, "spin": 10, "desc": "Descripción"}]'
+      selector:
+        object:

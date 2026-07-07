@@ -11,7 +11,7 @@ from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 
-from .const import DOMAIN, PLATFORMS, CONF_USE_ENCRYPTION
+from .const import DOMAIN, PLATFORMS, CONF_USE_ENCRYPTION, DEFAULT_PROGRAMS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,16 +25,36 @@ START_PROGRAM_SCHEMA = vol.Schema({
     vol.Optional("delay"): vol.All(vol.Coerce(int), vol.Range(min=0, max=96)),
 })
 
+SET_PROGRAMS_SCHEMA = vol.Schema({
+    vol.Required("programs"): vol.All(
+        cv.ensure_list,
+        [vol.Schema({
+            vol.Required("name"): cv.string,
+            vol.Required("pr"): cv.positive_int,
+            vol.Required("pr_code"): cv.string,
+            vol.Optional("temp", default=40): int,
+            vol.Optional("spin", default=10): int,
+            vol.Optional("desc", default=""): cv.string,
+        })],
+    ),
+})
+
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     ip = config_entry.data[CONF_IP_ADDRESS]
     password = config_entry.data.get(CONF_PASSWORD, "")
     use_encryption = config_entry.data.get(CONF_USE_ENCRYPTION, True)
 
+    # Merge programs from options with defaults
+    stored = config_entry.options.get("programs", {})
+    programs = {**DEFAULT_PROGRAMS, **stored}
+
     data = {
         "ip": ip,
         "password": password,
         "use_encryption": use_encryption,
+        "programs": programs,
+        "selected_program": list(programs.keys())[0],
     }
     hass.data.setdefault(DOMAIN, {})[config_entry.entry_id] = data
 
@@ -57,8 +77,30 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     async def handle_stop(call: ServiceCall) -> None:
         await hass.async_add_executor_job(_send_command, data, {"StSt": "0"})
 
-    hass.services.async_register(DOMAIN, "start_program", handle_start, schema=START_PROGRAM_SCHEMA)
+    async def handle_set_programs(call: ServiceCall) -> None:
+        new_programs = {}
+        for p in call.data["programs"]:
+            new_programs[p["name"]] = {
+                "pr": p["pr"],
+                "pr_code": p["pr_code"],
+                "temp": p.get("temp", 40),
+                "spin": p.get("spin", 10),
+                "desc": p.get("desc", ""),
+            }
+        merged = {**DEFAULT_PROGRAMS, **new_programs}
+        data["programs"] = merged
+        hass.config_entries.async_update_entry(
+            config_entry, options={**config_entry.options, "programs": new_programs}
+        )
+        _LOGGER.info("Programs updated: %d total", len(merged))
+
+    hass.services.async_register(
+        DOMAIN, "start_program", handle_start, schema=START_PROGRAM_SCHEMA
+    )
     hass.services.async_register(DOMAIN, "stop_program", handle_stop)
+    hass.services.async_register(
+        DOMAIN, "set_programs", handle_set_programs, schema=SET_PROGRAMS_SCHEMA
+    )
 
     return True
 
@@ -69,6 +111,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN].pop(entry.entry_id)
         hass.services.async_remove(DOMAIN, "start_program")
         hass.services.async_remove(DOMAIN, "stop_program")
+        hass.services.async_remove(DOMAIN, "set_programs")
     return unload_ok
 
 
