@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import binascii
-import json
 import logging
 
 from homeassistant.components.button import ButtonEntity
@@ -10,9 +9,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, CONF_USE_ENCRYPTION, MANUFACTURER, DEVICE_NAME
+from .const import DOMAIN, CONF_USE_ENCRYPTION, PROGRAMS, MANUFACTURER, DEVICE_NAME
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -23,7 +21,7 @@ async def async_setup_entry(
     data = hass.data[DOMAIN][config_entry.entry_id]
     async_add_entities([
         CandyStopButton(data, config_entry.entry_id),
-        CandyStartButton(data, config_entry.entry_id),
+        CandyStartSelectedButton(data, config_entry.entry_id),
     ])
 
 
@@ -47,7 +45,7 @@ class CandyButtonBase(ButtonEntity):
         use_encryption = self._data["use_encryption"]
         query = "Write=1" + "".join(f"&{k}={v}" for k, v in params.items())
         url = f"http://{ip}/http-write.json?encrypted=1&data="
-        if use_encryption:
+        if use_encryption and self._data["password"]:
             encrypted = self._xor_crypt(query.encode())
             url += binascii.hexlify(encrypted).decode().upper()
         else:
@@ -77,10 +75,10 @@ class CandyStopButton(CandyButtonBase):
         await self.hass.async_add_executor_job(self._send_command, {"StSt": "0"})
 
 
-class CandyStartButton(CandyButtonBase):
+class CandyStartSelectedButton(CandyButtonBase):
     @property
     def name(self) -> str:
-        return "Iniciar Lavarropas (DIARIO 39')"
+        return "Iniciar Lavarropas"
 
     @property
     def unique_id(self) -> str:
@@ -91,12 +89,24 @@ class CandyStartButton(CandyButtonBase):
         return "mdi:play"
 
     async def async_press(self) -> None:
+        select_state = self.hass.states.get("select.programa_lavarropas")
+        program = self._get_program_data(select_state)
+        if not program:
+            _LOGGER.error("No program selected or invalid program data")
+            return
         await self.hass.async_add_executor_job(
             self._send_command, {
                 "StSt": "1",
-                "PrNm": "1",
-                "PrCode": "136",
-                "TmpTgt": "40",
-                "SpdTgt": "10",
+                "PrNm": str(program["pr"]),
+                "PrCode": program["pr_code"],
+                "TmpTgt": str(program["temp"]),
+                "SpdTgt": str(program["spin"]),
             }
         )
+
+    @staticmethod
+    def _get_program_data(select_state):
+        if select_state is None:
+            return PROGRAMS.get("DIARIO 39'")
+        name = select_state.state
+        return PROGRAMS.get(name)
