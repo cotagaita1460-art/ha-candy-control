@@ -1,7 +1,6 @@
 """Integration for Candy Control."""
 from __future__ import annotations
 
-import binascii
 import logging
 
 import voluptuous as vol
@@ -11,6 +10,7 @@ from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 
+from .client import send_command
 from .const import DOMAIN, PLATFORMS, CONF_USE_ENCRYPTION, DEFAULT_PROGRAMS
 
 _LOGGER = logging.getLogger(__name__)
@@ -72,10 +72,14 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         }
         if call.data.get("delay"):
             params["DelVl"] = str(call.data["delay"])
-        await hass.async_add_executor_job(_send_command, data, params)
+        await hass.async_add_executor_job(
+            send_command, data["ip"], data["password"], data["use_encryption"], params
+        )
 
     async def handle_stop(call: ServiceCall) -> None:
-        await hass.async_add_executor_job(_send_command, data, {"StSt": "0"})
+        await hass.async_add_executor_job(
+            send_command, data["ip"], data["password"], data["use_encryption"], {"StSt": "0"}
+        )
 
     async def handle_set_programs(call: ServiceCall) -> None:
         new_programs = {}
@@ -113,27 +117,3 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.services.async_remove(DOMAIN, "stop_program")
         hass.services.async_remove(DOMAIN, "set_programs")
     return unload_ok
-
-
-def _send_command(data: dict, params: dict) -> bool:
-    import requests
-
-    ip = data["ip"]
-    password = data["password"]
-    use_encryption = data["use_encryption"]
-    query = "Write=1" + "".join(f"&{k}={v}" for k, v in params.items())
-
-    url = f"http://{ip}/http-write.json?encrypted=1&data="
-    if use_encryption and password:
-        key = password.encode()
-        encrypted = bytes(b ^ key[i % len(key)] for i, b in enumerate(query.encode()))
-        url += binascii.hexlify(encrypted).decode().upper()
-    else:
-        url += binascii.hexlify(query.encode()).decode().upper()
-
-    try:
-        resp = requests.get(url, timeout=5)
-        return resp.status_code == 200
-    except Exception as err:
-        _LOGGER.error("Send command failed: %s", err)
-        return False

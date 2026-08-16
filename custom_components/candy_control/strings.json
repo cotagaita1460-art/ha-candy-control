@@ -2,15 +2,43 @@
   "config": {
     "step": {
       "user": {
+        "title": "Candy Control",
+        "description": "¿Cómo querés configurar el lavarropas Candy?",
+        "menu_options": {
+          "discover": "Buscar automáticamente en la red",
+          "manual": "Ingresar los datos manualmente"
+        }
+      },
+      "manual": {
+        "title": "Configuración manual",
+        "description": "Ingresá la IP del lavarropas. Si dejás la clave vacía, se intentará detectar automáticamente.",
         "data": {
           "ip_address": "Dirección IP del lavarropas",
-          "password": "Clave de encriptación (XOR)"
-        },
-        "description": "Ingresá la IP del lavarropas Candy. La clave XOR se obtiene con la herramienta CandySimplyFi."
+          "password": "Clave de encriptación (XOR, opcional)"
+        }
+      },
+      "discover": {
+        "title": "Búsqueda automática",
+        "description": "Se escaneará la red local buscando lavarropas Candy (puede tardar unos segundos).",
+        "data": {
+          "scan": "Iniciar búsqueda"
+        }
+      },
+      "device": {
+        "title": "Seleccionar lavarropas",
+        "description": "Se encontraron varios dispositivos. Seleccioná el lavarropas Candy.",
+        "data": {
+          "device": "Dispositivo"
+        }
       }
     },
+    "error": {
+      "no_devices_found": "No se encontró ningún lavarropas Candy en la red. Verificá que esté encendido y conectado al WiFi.",
+      "detect_encryption": "No se pudo detectar la clave de encriptación automáticamente. Verificá la IP y probá ingresar la clave manualmente."
+    },
     "abort": {
-      "already_configured": "Este lavarropas ya está configurado"
+      "already_configured": "Este lavarropas ya está configurado",
+      "no_devices_found": "No se encontró ningún lavarropas Candy en la red."
     }
   }
 }

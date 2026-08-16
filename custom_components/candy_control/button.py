@@ -1,18 +1,13 @@
 """Button platform for Candy Control."""
 from __future__ import annotations
 
-import binascii
-import logging
-
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 
-from .const import DOMAIN, CONF_USE_ENCRYPTION, DEFAULT_PROGRAMS, MANUFACTURER, DEVICE_NAME
-
-_LOGGER = logging.getLogger(__name__)
+from .client import send_command
+from .const import DOMAIN, DEFAULT_PROGRAMS, MANUFACTURER, DEVICE_NAME
 
 
 async def async_setup_entry(
@@ -35,27 +30,13 @@ class CandyButtonBase(ButtonEntity):
             manufacturer=MANUFACTURER,
         )
 
-    def _xor_crypt(self, data_bytes: bytes) -> bytes:
-        key = self._data["password"].encode()
-        return bytes(b ^ key[i % len(key)] for i, b in enumerate(data_bytes))
-
     def _send_command(self, params: dict) -> bool:
-        import requests
-        ip = self._data["ip"]
-        use_encryption = self._data["use_encryption"]
-        query = "Write=1" + "".join(f"&{k}={v}" for k, v in params.items() if v is not None)
-        url = f"http://{ip}/http-write.json?encrypted=1&data="
-        if use_encryption and self._data["password"]:
-            encrypted = self._xor_crypt(query.encode())
-            url += binascii.hexlify(encrypted).decode().upper()
-        else:
-            url += binascii.hexlify(query.encode()).decode().upper()
-        try:
-            resp = requests.get(url, timeout=5)
-            return resp.status_code == 200
-        except Exception as err:
-            _LOGGER.error("Command failed: %s", err)
-            return False
+        return send_command(
+            self._data["ip"],
+            self._data["password"],
+            self._data["use_encryption"],
+            params,
+        )
 
 
 class CandyStopButton(CandyButtonBase):

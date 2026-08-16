@@ -1,4 +1,4 @@
-# Candy Control para Home Assistant v1.1.1
+# Candy Control para Home Assistant v1.2.0
 
 Extensión HACS para controlar lavarropas Candy/Simply-Fi desde Home Assistant.
 
@@ -16,7 +16,19 @@ Extensión HACS para controlar lavarropas Candy/Simply-Fi desde Home Assistant.
 4. Instalá "Candy Control"
 5. Reiniciá HA
 6. Settings → Integrations → Add → "Candy Control"
-7. Ingresá la IP del lavarropas (ej: `192.168.x.x`) y la clave de encriptación XOR
+
+## Configuración automática (v1.2.0)
+
+Al agregar la integración podés elegir:
+
+- **Buscar automáticamente en la red**: escanea la subred local y detecta la IP del
+  lavarropas. Luego recupera la clave de encriptación XOR automáticamente (ataque de
+  fuerza bruta sobre la respuesta cifrada, sin necesidad de conocerla).
+- **Ingresar los datos manualmente**: poné la IP y, opcionalmente, la clave XOR. Si
+  dejás la clave vacía, también se intentará detectarla automáticamente.
+
+La clave detectada se guarda como password de la integración y se usa para cifrar
+los comandos de escritura.
 
 ## Entidades
 
