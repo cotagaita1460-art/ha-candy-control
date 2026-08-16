@@ -153,8 +153,23 @@ async def detect_encryption(session, device_ip: str):
     raise ConnectionError("Could not detect encryption for device")
 
 
+def _decode_write_response(text: str, password: Optional[str]) -> str:
+    """Decode a write response (plaintext JSON, encrypted hex or empty)."""
+    body = text.strip()
+    if not body:
+        return "<empty response>"
+    if body.startswith("{"):
+        return body
+    if password and _is_hex(body):
+        try:
+            return decrypt(password.encode(), bytes.fromhex(body)).decode(errors="replace")
+        except ValueError:
+            pass
+    return repr(body[:80])
+
+
 def send_command(ip: str, password: str, use_encryption: bool, params: dict,
-                 retries: int = 5) -> bool:
+                 retries: int = 6) -> bool:
     """Send a write command to the device, with retries for flaky servers."""
     query = "Write=1" + "".join(f"&{k}={v}" for k, v in params.items() if v is not None)
     if use_encryption and password:
@@ -166,10 +181,27 @@ def send_command(ip: str, password: str, use_encryption: bool, params: dict,
 
     for attempt in range(1, retries + 1):
         try:
-            resp = requests.get(url, timeout=5)
-            if resp.status_code == 200:
+            resp = requests.get(url, timeout=5, headers=_HEADERS)
+            result = _decode_write_response(
+                resp.text, password if use_encryption else None
+            )
+            if "SUCCESS" in result:
+                _LOGGER.info("Command sent: %s -> %s", query, result)
                 return True
-            _LOGGER.warning("Write returned HTTP %s (attempt %d)", resp.status_code, attempt)
+            if "NO GET" in result or "BAD REQUEST" in result:
+                _LOGGER.warning(
+                    "Device did not accept the command (attempt %d): %s %s",
+                    attempt,
+                    result,
+                    "(machine off, busy or not in remote control mode?)",
+                )
+            else:
+                _LOGGER.warning(
+                    "Write not confirmed (attempt %d): HTTP %s %s",
+                    attempt,
+                    resp.status_code,
+                    result,
+                )
         except Exception as err:  # pylint: disable=broad-except
             _LOGGER.warning("Write failed (attempt %d): %s", attempt, err)
         time.sleep(2)
