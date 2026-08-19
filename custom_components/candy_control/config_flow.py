@@ -120,6 +120,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def _detect(self, ip: str):
         session = async_get_clientsession(self.hass)
         encryption, key = await detect_encryption(session, ip)
+        _LOGGER.info("Detection for %s: encryption=%s key=%s", ip, encryption, bool(key))
         if encryption == Encryption.NO_ENCRYPTION:
             return False, ""
         if encryption == Encryption.ENCRYPTION_WITHOUT_KEY:

@@ -114,20 +114,6 @@ async def discover_devices(hass) -> list[str]:
 
 async def detect_encryption(session, device_ip: str):
     """Determine the encryption mode and recover the XOR key if needed."""
-    for _attempt in range(4):
-        try:
-            async with async_timeout.timeout(5):
-                resp = await session.get(
-                    _READ_URL.format(ip=device_ip, encrypted=0), headers=_HEADERS
-                )
-                text = await resp.text()
-                if text.strip().startswith("{"):
-                    data = json.loads(text)
-                    if isinstance(data, dict) and not data.get("response"):
-                        return Encryption.NO_ENCRYPTION, None
-        except Exception:  # pylint: disable=broad-except
-            pass
-
     for _attempt in range(6):
         try:
             async with async_timeout.timeout(5):
@@ -140,29 +126,56 @@ async def detect_encryption(session, device_ip: str):
                 raw = bytes.fromhex(text)
                 try:
                     json.loads(raw)
+                    _LOGGER.info("Device %s: encrypted without key", device_ip)
                     return Encryption.ENCRYPTION_WITHOUT_KEY, None
                 except (ValueError, json.JSONDecodeError):
                     key = await asyncio.to_thread(find_key, raw)
                     if key:
+                        _LOGGER.info("Device %s: encryption key found", device_ip)
                         return Encryption.ENCRYPTION, key
+        except Exception:  # pylint: disable=broad-except
+            pass
+
+    for _attempt in range(4):
+        try:
+            async with async_timeout.timeout(5):
+                resp = await session.get(
+                    _READ_URL.format(ip=device_ip, encrypted=0), headers=_HEADERS
+                )
+                text = await resp.text()
+                if text.strip().startswith("{"):
+                    data = json.loads(text)
+                    if isinstance(data, dict) and not data.get("response"):
+                        _LOGGER.info("Device %s: no encryption", device_ip)
+                        return Encryption.NO_ENCRYPTION, None
         except Exception:  # pylint: disable=broad-except
             pass
 
     raise ConnectionError("Could not detect encryption for device")
 
 
-def _decode_write_response(text: str, password: Optional[str]) -> str:
+def _decode_write_response(text: str, password: Optional[str],
+                           encrypted_response: Optional[bytes] = None) -> str:
     """Decode a write response (plaintext JSON, encrypted hex or empty)."""
     body = text.strip()
     if not body:
         return "<empty response>"
     if body.startswith("{"):
         return body
-    if password and _is_hex(body):
-        try:
-            return decrypt(password.encode(), bytes.fromhex(body)).decode(errors="replace")
-        except ValueError:
-            pass
+    if _is_hex(body):
+        raw = bytes.fromhex(body)
+        if password:
+            try:
+                return decrypt(password.encode(), raw).decode(errors="replace")
+            except ValueError:
+                pass
+        if encrypted_response is not None:
+            key = find_key(raw)
+            if key:
+                try:
+                    return decrypt(key.encode(), raw).decode(errors="replace")
+                except ValueError:
+                    pass
     return repr(body[:80])
 
 
@@ -170,15 +183,15 @@ async def send_command(ip: str, password: str, use_encryption: bool, params: dic
                        retries: int = 6, hass=None) -> bool:
     """Send a write command to the device, with retries for flaky servers."""
     query = "Write=1" + "".join(f"&{k}={v}" for k, v in params.items() if v is not None)
-    if use_encryption and password:
-        key = password.encode()
+    key = password.encode() if password else None
+    if use_encryption and key:
         data = bytes(b ^ key[i % len(key)] for i, b in enumerate(query.encode()))
     else:
         data = query.encode()
     hex_data = binascii.hexlify(data).decode().upper()
     url = _WRITE_URL.format(ip=ip, data=hex_data)
-    _LOGGER.debug("send_command ip=%s encrypted=%s query=%s hex_len=%d",
-                  ip, use_encryption, query, len(hex_data))
+    _LOGGER.info("send_command ip=%s enc=%s has_key=%s query=%s",
+                 ip, use_encryption, bool(key), query)
 
     session = async_get_clientsession(hass) if hass else aiohttp.ClientSession()
     for attempt in range(1, retries + 1):
@@ -186,10 +199,8 @@ async def send_command(ip: str, password: str, use_encryption: bool, params: dic
             async with async_timeout.timeout(5):
                 resp = await session.get(url, headers=_HEADERS)
                 text = await resp.text()
-            _LOGGER.debug("Attempt %d: HTTP %d body=%s", attempt, resp.status, text[:200])
-            result = _decode_write_response(
-                text, password if use_encryption else None
-            )
+            result = _decode_write_response(text, password or None)
+            _LOGGER.info("Attempt %d: HTTP %d result=%s", attempt, resp.status, result[:120])
             if "SUCCESS" in result:
                 _LOGGER.info("Command sent OK: %s -> %s", query, result)
                 return True
