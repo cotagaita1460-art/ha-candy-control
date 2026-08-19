@@ -70,11 +70,19 @@ class CandyProgramSelect(SelectEntity):
             "Stm": str(program.get("steam", 0)),
             "Dry": str(program.get("dry", 0)),
         }
-        _LOGGER.info("Auto-starting wash: %s -> %s", option, params)
-        await send_command(
-            self._data["ip"],
-            self._data["password"],
-            self._data["use_encryption"],
-            params,
-            hass=self.hass,
-        )
+        _LOGGER.info("Auto-starting wash: %s -> %s (ip=%s enc=%s)",
+                     option, params, self._data["ip"], self._data["use_encryption"])
+        try:
+            result = await send_command(
+                self._data["ip"],
+                self._data["password"],
+                self._data["use_encryption"],
+                params,
+                hass=self.hass,
+            )
+            if result:
+                _LOGGER.info("Wash started successfully for program: %s", option)
+            else:
+                _LOGGER.error("Failed to start wash for program: %s", option)
+        except Exception as err:
+            _LOGGER.exception("Error starting wash: %s", err)

@@ -175,7 +175,10 @@ async def send_command(ip: str, password: str, use_encryption: bool, params: dic
         data = bytes(b ^ key[i % len(key)] for i, b in enumerate(query.encode()))
     else:
         data = query.encode()
-    url = _WRITE_URL.format(ip=ip, data=binascii.hexlify(data).decode().upper())
+    hex_data = binascii.hexlify(data).decode().upper()
+    url = _WRITE_URL.format(ip=ip, data=hex_data)
+    _LOGGER.debug("send_command ip=%s encrypted=%s query=%s hex_len=%d",
+                  ip, use_encryption, query, len(hex_data))
 
     session = async_get_clientsession(hass) if hass else aiohttp.ClientSession()
     for attempt in range(1, retries + 1):
@@ -183,27 +186,26 @@ async def send_command(ip: str, password: str, use_encryption: bool, params: dic
             async with async_timeout.timeout(5):
                 resp = await session.get(url, headers=_HEADERS)
                 text = await resp.text()
+            _LOGGER.debug("Attempt %d: HTTP %d body=%s", attempt, resp.status, text[:200])
             result = _decode_write_response(
                 text, password if use_encryption else None
             )
             if "SUCCESS" in result:
-                _LOGGER.info("Command sent: %s -> %s", query, result)
+                _LOGGER.info("Command sent OK: %s -> %s", query, result)
                 return True
             if "NO GET" in result or "BAD REQUEST" in result:
                 _LOGGER.warning(
-                    "Device did not accept the command (attempt %d): %s %s",
-                    attempt,
-                    result,
-                    "(machine off, busy or not in remote control mode?)",
+                    "Device rejected command (attempt %d): %s "
+                    "(is the machine off, busy, or not in remote control mode?)",
+                    attempt, result,
                 )
             else:
                 _LOGGER.warning(
                     "Write not confirmed (attempt %d): HTTP %s %s",
-                    attempt,
-                    resp.status,
-                    result,
+                    attempt, resp.status, result,
                 )
         except Exception as err:  # pylint: disable=broad-except
             _LOGGER.warning("Write failed (attempt %d): %s", attempt, err)
         await asyncio.sleep(2)
+    _LOGGER.error("send_command FAILED after %d attempts for query: %s", retries, query)
     return False
