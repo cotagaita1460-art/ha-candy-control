@@ -1,6 +1,8 @@
 """Button platform for Candy Control."""
 from __future__ import annotations
 
+import logging
+
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -8,6 +10,8 @@ from homeassistant.helpers.entity import DeviceInfo
 
 from .client import send_command
 from .const import DOMAIN, DEFAULT_PROGRAMS, MANUFACTURER, DEVICE_NAME
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -30,12 +34,13 @@ class CandyButtonBase(ButtonEntity):
             manufacturer=MANUFACTURER,
         )
 
-    def _send_command(self, params: dict) -> bool:
-        return send_command(
+    async def _send_command(self, params: dict) -> bool:
+        return await send_command(
             self._data["ip"],
             self._data["password"],
             self._data["use_encryption"],
             params,
+            hass=self.hass,
         )
 
 
@@ -53,7 +58,8 @@ class CandyStopButton(CandyButtonBase):
         return "mdi:stop"
 
     async def async_press(self) -> None:
-        await self.hass.async_add_executor_job(self._send_command, {"StSt": "0"})
+        _LOGGER.info("Stop button pressed")
+        await self._send_command({"StSt": "0"})
 
 
 class CandyStartSelectedButton(CandyButtonBase):
@@ -71,21 +77,15 @@ class CandyStartSelectedButton(CandyButtonBase):
 
     async def async_press(self) -> None:
         programs = self._data.get("programs", DEFAULT_PROGRAMS)
-        # Read directly from the select entity state
-        select_state = self.hass.states.get("select.lavarropas_candy_programa_lavarropas")
-        if select_state:
-            selected = select_state.state
-        else:
-            selected = self._data.get("selected_program", list(programs.keys())[0])
+        selected = self._data.get("selected_program", list(programs.keys())[0])
         program = programs.get(selected) or list(programs.values())[0]
-        await self.hass.async_add_executor_job(
-            self._send_command, {
-                "StSt": "1",
-                "PrNm": str(program["pr"]),
-                "PrCode": program["pr_code"],
-                "TmpTgt": str(program["temp"]),
-                "SpdTgt": str(program["spin"]),
-                "Stm": str(program.get("steam", 0)),
-                "Dry": str(program.get("dry", 0)),
-            }
-        )
+        _LOGGER.info("Start button pressed: program=%s", selected)
+        await self._send_command({
+            "StSt": "1",
+            "PrNm": str(program["pr"]),
+            "PrCode": program["pr_code"],
+            "TmpTgt": str(program["temp"]),
+            "SpdTgt": str(program["spin"]),
+            "Stm": str(program.get("steam", 0)),
+            "Dry": str(program.get("dry", 0)),
+        })

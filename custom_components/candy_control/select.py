@@ -8,6 +8,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 
+from .client import send_command
 from .const import DOMAIN, DEFAULT_PROGRAMS, MANUFACTURER, DEVICE_NAME
 
 _LOGGER = logging.getLogger(__name__)
@@ -22,7 +23,6 @@ async def async_setup_entry(
 
 class CandyProgramSelect(SelectEntity):
     def __init__(self, hass, data, entry_id: str):
-        self._hass = hass
         self._data = data
         self._entry_id = entry_id
         programs = data.get("programs", DEFAULT_PROGRAMS)
@@ -56,3 +56,25 @@ class CandyProgramSelect(SelectEntity):
         self._attr_current_option = option
         self._data["selected_program"] = option
         self.async_write_ha_state()
+        programs = self._data.get("programs", DEFAULT_PROGRAMS)
+        program = programs.get(option)
+        if not program:
+            _LOGGER.error("Program '%s' not found in program list", option)
+            return
+        params = {
+            "StSt": "1",
+            "PrNm": str(program["pr"]),
+            "PrCode": program["pr_code"],
+            "TmpTgt": str(program["temp"]),
+            "SpdTgt": str(program["spin"]),
+            "Stm": str(program.get("steam", 0)),
+            "Dry": str(program.get("dry", 0)),
+        }
+        _LOGGER.info("Auto-starting wash: %s -> %s", option, params)
+        await send_command(
+            self._data["ip"],
+            self._data["password"],
+            self._data["use_encryption"],
+            params,
+            hass=self.hass,
+        )

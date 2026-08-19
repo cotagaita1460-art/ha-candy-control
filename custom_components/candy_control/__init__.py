@@ -72,14 +72,10 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         }
         if call.data.get("delay"):
             params["DelVl"] = str(call.data["delay"])
-        await hass.async_add_executor_job(
-            send_command, data["ip"], data["password"], data["use_encryption"], params
-        )
+        await send_command(data["ip"], data["password"], data["use_encryption"], params, hass=hass)
 
     async def handle_stop(call: ServiceCall) -> None:
-        await hass.async_add_executor_job(
-            send_command, data["ip"], data["password"], data["use_encryption"], {"StSt": "0"}
-        )
+        await send_command(data["ip"], data["password"], data["use_encryption"], {"StSt": "0"}, hass=hass)
 
     async def handle_set_programs(call: ServiceCall) -> None:
         new_programs = {}

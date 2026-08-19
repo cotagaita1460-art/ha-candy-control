@@ -13,12 +13,10 @@ import logging
 import math
 import socket
 import string
-import time
 from typing import Iterable, Optional
 
 import aiohttp
 import async_timeout
-import requests
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 _LOGGER = logging.getLogger(__name__)
@@ -168,8 +166,8 @@ def _decode_write_response(text: str, password: Optional[str]) -> str:
     return repr(body[:80])
 
 
-def send_command(ip: str, password: str, use_encryption: bool, params: dict,
-                 retries: int = 6) -> bool:
+async def send_command(ip: str, password: str, use_encryption: bool, params: dict,
+                       retries: int = 6, hass=None) -> bool:
     """Send a write command to the device, with retries for flaky servers."""
     query = "Write=1" + "".join(f"&{k}={v}" for k, v in params.items() if v is not None)
     if use_encryption and password:
@@ -179,11 +177,14 @@ def send_command(ip: str, password: str, use_encryption: bool, params: dict,
         data = query.encode()
     url = _WRITE_URL.format(ip=ip, data=binascii.hexlify(data).decode().upper())
 
+    session = async_get_clientsession(hass) if hass else aiohttp.ClientSession()
     for attempt in range(1, retries + 1):
         try:
-            resp = requests.get(url, timeout=5, headers=_HEADERS)
+            async with async_timeout.timeout(5):
+                resp = await session.get(url, headers=_HEADERS)
+                text = await resp.text()
             result = _decode_write_response(
-                resp.text, password if use_encryption else None
+                text, password if use_encryption else None
             )
             if "SUCCESS" in result:
                 _LOGGER.info("Command sent: %s -> %s", query, result)
@@ -199,10 +200,10 @@ def send_command(ip: str, password: str, use_encryption: bool, params: dict,
                 _LOGGER.warning(
                     "Write not confirmed (attempt %d): HTTP %s %s",
                     attempt,
-                    resp.status_code,
+                    resp.status,
                     result,
                 )
         except Exception as err:  # pylint: disable=broad-except
             _LOGGER.warning("Write failed (attempt %d): %s", attempt, err)
-        time.sleep(2)
+        await asyncio.sleep(2)
     return False
