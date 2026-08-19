@@ -58,7 +58,23 @@ def _find_candidate_key_codepoints(encrypted: bytes, offset: int) -> Iterable[in
 
 
 def find_key(encrypted_response: bytes) -> Optional[str]:
-    """Brute force the 16-byte alphanumeric XOR key from an encrypted response."""
+    """Derive the XOR key using known-plaintext attack, with brute-force fallback."""
+    known_prefix = b'{\r\n\t"statusLavat'
+    if len(encrypted_response) >= len(known_prefix):
+        key_bytes = bytes(encrypted_response[i] ^ known_prefix[i] for i in range(len(known_prefix)))
+        try:
+            key_str = key_bytes.decode("ascii")
+            if all(c in string.ascii_letters + string.digits for c in key_str):
+                try:
+                    decrypted = decrypt(key_bytes, encrypted_response)
+                    json.loads(decrypted)
+                    _LOGGER.info("Key derived via known-plaintext attack")
+                    return key_str
+                except (ValueError, json.JSONDecodeError):
+                    pass
+        except (UnicodeDecodeError, ValueError):
+            pass
+
     candidates = [
         list(_find_candidate_key_codepoints(encrypted_response, i)) for i in range(KEY_LEN)
     ]
@@ -154,29 +170,44 @@ async def detect_encryption(session, device_ip: str):
     raise ConnectionError("Could not detect encryption for device")
 
 
-def _decode_write_response(text: str, password: Optional[str],
-                           encrypted_response: Optional[bytes] = None) -> str:
-    """Decode a write response (plaintext JSON, encrypted hex or empty)."""
+def _decode_write_response(text: str, password: Optional[str]) -> tuple[bool, str]:
+    """Decode a write response.
+
+    Returns (success, decoded_text).
+    Success = response was decrypted and is valid JSON (device acknowledged).
+    The Candy washer returns {"statusLavatrice":{...}} on success, never "SUCCESS".
+    """
     body = text.strip()
     if not body:
-        return "<empty response>"
+        return False, "<empty response>"
     if body.startswith("{"):
-        return body
+        try:
+            data = json.loads(body)
+            if "statusLavatrice" in data:
+                return True, body
+        except (ValueError, json.JSONDecodeError):
+            pass
+        return False, body
     if _is_hex(body):
         raw = bytes.fromhex(body)
         if password:
             try:
-                return decrypt(password.encode(), raw).decode(errors="replace")
-            except ValueError:
+                decoded = decrypt(password.encode(), raw).decode(errors="replace")
+                data = json.loads(decoded)
+                if "statusLavatrice" in data:
+                    return True, decoded
+            except (ValueError, json.JSONDecodeError, KeyError):
                 pass
-        if encrypted_response is not None:
-            key = find_key(raw)
-            if key:
-                try:
-                    return decrypt(key.encode(), raw).decode(errors="replace")
-                except ValueError:
-                    pass
-    return repr(body[:80])
+        key = find_key(raw)
+        if key:
+            try:
+                decoded = decrypt(key.encode(), raw).decode(errors="replace")
+                data = json.loads(decoded)
+                if "statusLavatrice" in data:
+                    return True, decoded
+            except (ValueError, json.JSONDecodeError, KeyError):
+                pass
+    return False, repr(body[:200])
 
 
 async def send_command(ip: str, password: str, use_encryption: bool, params: dict,
@@ -184,8 +215,11 @@ async def send_command(ip: str, password: str, use_encryption: bool, params: dic
     """Send a write command to the device, with retries for flaky servers."""
     query = "Write=1" + "".join(f"&{k}={v}" for k, v in params.items() if v is not None)
     key = password.encode() if password else None
-    if use_encryption and key:
-        data = bytes(b ^ key[i % len(key)] for i, b in enumerate(query.encode()))
+    if use_encryption:
+        if key:
+            data = bytes(b ^ key[i % len(key)] for i, b in enumerate(query.encode()))
+        else:
+            data = query.encode()
     else:
         data = query.encode()
     hex_data = binascii.hexlify(data).decode().upper()
@@ -199,10 +233,11 @@ async def send_command(ip: str, password: str, use_encryption: bool, params: dic
             async with async_timeout.timeout(5):
                 resp = await session.get(url, headers=_HEADERS)
                 text = await resp.text()
-            result = _decode_write_response(text, password or None)
-            _LOGGER.info("Attempt %d: HTTP %d result=%s", attempt, resp.status, result[:120])
-            if "SUCCESS" in result:
-                _LOGGER.info("Command sent OK: %s -> %s", query, result)
+            success, result = _decode_write_response(text, password or None)
+            _LOGGER.info("Attempt %d: HTTP %d success=%s result=%s",
+                         attempt, resp.status, success, result[:200])
+            if success:
+                _LOGGER.info("Command sent OK: %s", query)
                 return True
             if "NO GET" in result or "BAD REQUEST" in result:
                 _LOGGER.warning(

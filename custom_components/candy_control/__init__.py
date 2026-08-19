@@ -75,7 +75,8 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         await send_command(data["ip"], data["password"], data["use_encryption"], params, hass=hass)
 
     async def handle_stop(call: ServiceCall) -> None:
-        await send_command(data["ip"], data["password"], data["use_encryption"], {"StSt": "0"}, hass=hass)
+        await send_command(data["ip"], data["password"], data["use_encryption"],
+                           {"StSt": "0", "PrNm": "0", "DelVl": "0"}, hass=hass)
 
     async def handle_set_programs(call: ServiceCall) -> None:
         new_programs = {}

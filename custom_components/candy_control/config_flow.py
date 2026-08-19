@@ -1,6 +1,7 @@
 """Config flow for Candy Control."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -11,7 +12,10 @@ from homeassistant.const import CONF_IP_ADDRESS, CONF_PASSWORD
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .client import Encryption, detect_encryption, discover_devices
+from .client import (
+    Encryption, detect_encryption, discover_devices, find_key,
+    _is_hex, _READ_URL,
+)
 from .const import DOMAIN, CONF_USE_ENCRYPTION
 
 _LOGGER = logging.getLogger(__name__)
@@ -122,6 +126,21 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         encryption, key = await detect_encryption(session, ip)
         _LOGGER.info("Detection for %s: encryption=%s key=%s", ip, encryption, bool(key))
         if encryption == Encryption.NO_ENCRYPTION:
+            for _attempt in range(6):
+                try:
+                    async with async_timeout.timeout(5):
+                        resp = await session.get(
+                            _READ_URL.format(ip=ip, encrypted=1), headers=_HEADERS
+                        )
+                        text = await resp.text()
+                        if _is_hex(text):
+                            raw = bytes.fromhex(text)
+                            found_key = await asyncio.to_thread(find_key, raw)
+                            if found_key:
+                                _LOGGER.info("Key recovered from encrypted read for %s", ip)
+                                return True, found_key
+                except Exception:  # pylint: disable=broad-except
+                    pass
             return False, ""
         if encryption == Encryption.ENCRYPTION_WITHOUT_KEY:
             return True, ""

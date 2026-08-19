@@ -59,7 +59,7 @@ class CandyStopButton(CandyButtonBase):
 
     async def async_press(self) -> None:
         _LOGGER.info("Stop button pressed")
-        await self._send_command({"StSt": "0"})
+        await self._send_command({"StSt": "0", "PrNm": "0", "DelVl": "0"})
 
 
 class CandyStartSelectedButton(CandyButtonBase):
